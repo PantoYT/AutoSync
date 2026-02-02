@@ -1,128 +1,140 @@
 @echo off
 setlocal EnableDelayedExpansion
-title AutoSync Master - USB Monitor
 
-REM ==== INITIALIZE ====
+REM ═══════════════════════════════════════════════════
+REM AutoSync Master Orchestrator v2.1
+REM Runs all sync modules when USB is detected
+REM ═══════════════════════════════════════════════════
+
+REM Get script directory
 set SCRIPT_DIR=%~dp0
 set SCRIPT_DIR=%SCRIPT_DIR:~0,-1%
-set CONFIG_FILE=%SCRIPT_DIR%\sync_config.ini
+
+REM Paths
+set CONFIG=%SCRIPT_DIR%\sync_config.ini
+set LOG_DIR=%SCRIPT_DIR%\logs
 set MODULE_DIR=%SCRIPT_DIR%\modules
 
-REM Read config
-call :READ_CONFIG
-
-REM Create log directory
-set LOG_DIR=%SCRIPT_DIR%\%LOG_DIR_CONFIG%
+REM Create logs directory if it doesn't exist
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 
 REM Set log file with date
-for /f "tokens=1-3 delims=/ " %%a in ('date /t') do set LOG_DATE=%%a_%%b_%%c
+for /f "tokens=2-4 delims=/ " %%a in ('date /t') do (
+    set LOG_DATE=%%c_%%a_%%b
+)
 set LOGFILE=%LOG_DIR%\sync_%LOG_DATE%.log
 
+REM Check if config exists
+if not exist "%CONFIG%" (
+    echo ERROR: Configuration file not found: %CONFIG%
+    echo Please run setup.bat first!
+    pause
+    exit /b 1
+)
+
+REM Start logging
 echo ========================================= >> "%LOGFILE%"
 echo AutoSync Master Started: %date% %time% >> "%LOGFILE%"
 echo ========================================= >> "%LOGFILE%"
-echo Config loaded from: %CONFIG_FILE% >> "%LOGFILE%"
-echo.
-
-cls
-echo ╔════════════════════════════════════════╗
-echo ║        AutoSync Master v2.0            ║
-echo ╚════════════════════════════════════════╝
-echo.
-echo [*] Monitoring for USB drive: %USB_DRIVE%
-echo [*] Log: %LOGFILE%
-echo [*] Press Ctrl+C to exit
-echo.
-
-:MAIN_LOOP
-timeout /t %CHECK_INTERVAL% >nul
-
-if not exist %USB_DRIVE%\ (
-    echo [%time%] Waiting for USB... >> "%LOGFILE%"
-    goto MAIN_LOOP
-)
-
+echo Config loaded from: %CONFIG% >> "%LOGFILE%"
 echo ========================================= >> "%LOGFILE%"
-echo [%time%] USB DETECTED: %USB_DRIVE% >> "%LOGFILE%"
-echo ========================================= >> "%LOGFILE%"
-echo.
-echo [√] USB detected! Starting sync...
 
-REM ==== RUN ALL MODULES ====
-call :RUN_MODULE "usb_sync.bat" "USB Sync (E: ↔ USB)"
-call :RUN_MODULE "git_sync.bat" "Git Auto-Commit/Push"
-call :RUN_MODULE "db_deploy.bat" "Database Deployment"
-call :RUN_MODULE "web_deploy.bat" "Web Files Deployment"
-
-echo [%time%] All modules completed >> "%LOGFILE%"
-echo.
-echo [√] Sync complete! Monitoring for USB removal...
-
-:USB_MONITOR
-timeout /t %CHECK_INTERVAL% >nul
-
-if not exist %USB_DRIVE%\ (
-    echo ========================================= >> "%LOGFILE%"
-    echo [%time%] USB REMOVED >> "%LOGFILE%"
-    echo ========================================= >> "%LOGFILE%"
-    echo.
-    echo [!] USB removed. Waiting for next insertion...
-    goto MAIN_LOOP
-)
-
-goto USB_MONITOR
-
-REM ==== SUBROUTINES ====
-
-:RUN_MODULE
-set MODULE_NAME=%~1
-set MODULE_DESC=%~2
-set MODULE_PATH=%MODULE_DIR%\%MODULE_NAME%
-
-if not exist "%MODULE_PATH%" (
-    echo [%time%] ERROR: Module not found: %MODULE_PATH% >> "%LOGFILE%"
-    echo [X] Module not found: %MODULE_NAME%
-    goto :EOF
-)
-
-echo [%time%] Running: %MODULE_DESC% >> "%LOGFILE%"
-echo [→] %MODULE_DESC%...
-call "%MODULE_PATH%" "%CONFIG_FILE%" "%LOGFILE%"
-if errorlevel 1 (
-    echo [%time%] WARNING: %MODULE_NAME% returned error code %errorlevel% >> "%LOGFILE%"
-    echo [!] Warning: %MODULE_NAME% had errors
-) else (
-    echo [%time%] SUCCESS: %MODULE_DESC% completed >> "%LOGFILE%"
-    echo [√] %MODULE_DESC% done
-)
-goto :EOF
-
-:READ_CONFIG
-REM Read USB drive
-for /f "usebackq tokens=1,2 delims==" %%a in ("%CONFIG_FILE%") do (
+REM Read USB drive letter from config
+set USB_DRIVE=
+for /f "usebackq tokens=1,2 delims==" %%a in ("%CONFIG%") do (
     set LINE=%%a
     set VALUE=%%b
-    
-    REM Remove leading/trailing spaces
     for /f "tokens=* delims= " %%x in ("!LINE!") do set LINE=%%x
     for /f "tokens=* delims= " %%x in ("!VALUE!") do set VALUE=%%x
-    
-    REM Skip comments and empty lines
-    if not "!LINE!"=="" (
-        if not "!LINE:~0,1!"==";" (
-            if "!LINE!"=="drive" set USB_DRIVE=!VALUE!
-            if "!LINE!"=="check_interval" set CHECK_INTERVAL=!VALUE!
-            if "!LINE!"=="dir" set LOG_DIR_CONFIG=!VALUE!
-        )
-    )
+    if "!LINE!"=="drive" set USB_DRIVE=!VALUE!
 )
 
-REM Set defaults if not found
-if not defined USB_DRIVE set USB_DRIVE=G:
-if not defined CHECK_INTERVAL set CHECK_INTERVAL=5
-if not defined LOG_DIR_CONFIG set LOG_DIR_CONFIG=logs
+if not defined USB_DRIVE (
+    echo ERROR: USB drive not configured in sync_config.ini
+    pause
+    exit /b 1
+)
 
-goto :EOF
+REM Read check interval
+set CHECK_INTERVAL=5
+for /f "usebackq tokens=1,2 delims==" %%a in ("%CONFIG%") do (
+    set LINE=%%a
+    set VALUE=%%b
+    for /f "tokens=* delims= " %%x in ("!LINE!") do set LINE=%%x
+    for /f "tokens=* delims= " %%x in ("!VALUE!") do set VALUE=%%x
+    if "!LINE!"=="check_interval" set CHECK_INTERVAL=!VALUE!
+)
+
+REM Main loop - runs forever
+:MAIN_LOOP
+
+REM Wait for USB drive
+:WAIT_FOR_USB
+if not exist "%USB_DRIVE%\" (
+    timeout /t %CHECK_INTERVAL% /nobreak >nul
+    goto WAIT_FOR_USB
+)
+
+echo [%time%] USB DETECTED: %USB_DRIVE% >> "%LOGFILE%"
+echo ========================================= >> "%LOGFILE%"
+
+REM ════════════════════════════════════════
+REM MODULE 1: USB Sync (E: ↔ USB)
+REM ════════════════════════════════════════
+echo [%time%] Running: USB Sync (E: ^<-^> USB) >> "%LOGFILE%"
+if exist "%MODULE_DIR%\usb_sync.bat" (
+    call "%MODULE_DIR%\usb_sync.bat" "%CONFIG%" "%LOGFILE%"
+) else (
+    echo [%time%] WARNING: usb_sync.bat not found! >> "%LOGFILE%"
+)
+
+REM ════════════════════════════════════════
+REM MODULE 2: Git Auto-Commit/Push
+REM ════════════════════════════════════════
+echo [%time%] Running: Git Sync (auto-commit/push) >> "%LOGFILE%"
+if exist "%MODULE_DIR%\git_sync.bat" (
+    call "%MODULE_DIR%\git_sync.bat" "%CONFIG%" "%LOGFILE%"
+) else (
+    echo [%time%] WARNING: git_sync.bat not found! >> "%LOGFILE%"
+)
+
+REM ════════════════════════════════════════
+REM MODULE 3: Database Deployment
+REM ════════════════════════════════════════
+echo [%time%] Running: Database Deployment (.sql -^> MySQL) >> "%LOGFILE%"
+if exist "%MODULE_DIR%\db_deploy.bat" (
+    call "%MODULE_DIR%\db_deploy.bat" "%CONFIG%" "%LOGFILE%"
+) else (
+    echo [%time%] WARNING: db_deploy.bat not found! >> "%LOGFILE%"
+)
+
+REM ════════════════════════════════════════
+REM MODULE 4: Web Deployment
+REM ════════════════════════════════════════
+echo [%time%] Running: Web Deployment (PHP -^> htdocs) >> "%LOGFILE%"
+if exist "%MODULE_DIR%\web_deploy.bat" (
+    call "%MODULE_DIR%\web_deploy.bat" "%CONFIG%" "%LOGFILE%"
+) else (
+    echo [%time%] WARNING: web_deploy.bat not found! >> "%LOGFILE%"
+)
+
+echo ========================================= >> "%LOGFILE%"
+echo [%time%] ALL MODULES COMPLETE >> "%LOGFILE%"
+echo ========================================= >> "%LOGFILE%"
+echo. >> "%LOGFILE%"
+
+REM Wait for USB removal
+:WAIT_FOR_REMOVAL
+if exist "%USB_DRIVE%\" (
+    timeout /t %CHECK_INTERVAL% /nobreak >nul
+    goto WAIT_FOR_REMOVAL
+)
+
+echo [%time%] USB REMOVED: %USB_DRIVE% >> "%LOGFILE%"
+echo [%time%] Waiting for next insertion... >> "%LOGFILE%"
+echo. >> "%LOGFILE%"
+
+REM Loop back to wait for USB again
+goto MAIN_LOOP
 
 endlocal
