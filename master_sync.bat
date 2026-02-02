@@ -33,6 +33,13 @@ if not exist "%CONFIG%" (
 )
 
 REM Start logging
+echo =========================================
+echo AutoSync Master Started: %date% %time%
+echo =========================================
+echo Config loaded from: %CONFIG%
+echo Waiting for USB drive: %USB_DRIVE%
+echo =========================================
+echo.
 echo ========================================= >> "%LOGFILE%"
 echo AutoSync Master Started: %date% %time% >> "%LOGFILE%"
 echo ========================================= >> "%LOGFILE%"
@@ -75,12 +82,15 @@ if not exist "%USB_DRIVE%\" (
     goto WAIT_FOR_USB
 )
 
+echo [%time%] USB DETECTED: %USB_DRIVE%
 echo [%time%] USB DETECTED: %USB_DRIVE% >> "%LOGFILE%"
+echo =========================================
 echo ========================================= >> "%LOGFILE%"
 
 REM ════════════════════════════════════════
 REM MODULE 1: USB Sync (E: ↔ USB)
 REM ════════════════════════════════════════
+echo [%time%] Running: USB Sync (E: ^<-^> USB)
 echo [%time%] Running: USB Sync (E: ^<-^> USB) >> "%LOGFILE%"
 if exist "%MODULE_DIR%\usb_sync.bat" (
     call "%MODULE_DIR%\usb_sync.bat" "%CONFIG%" "%LOGFILE%"
@@ -91,6 +101,7 @@ if exist "%MODULE_DIR%\usb_sync.bat" (
 REM ════════════════════════════════════════
 REM MODULE 2: Git Auto-Commit/Push
 REM ════════════════════════════════════════
+echo [%time%] Running: Git Sync (auto-commit/push)
 echo [%time%] Running: Git Sync (auto-commit/push) >> "%LOGFILE%"
 if exist "%MODULE_DIR%\git_sync.bat" (
     call "%MODULE_DIR%\git_sync.bat" "%CONFIG%" "%LOGFILE%"
@@ -101,6 +112,7 @@ if exist "%MODULE_DIR%\git_sync.bat" (
 REM ════════════════════════════════════════
 REM MODULE 3: Database Deployment
 REM ════════════════════════════════════════
+echo [%time%] Running: Database Deployment (.sql -^> MySQL)
 echo [%time%] Running: Database Deployment (.sql -^> MySQL) >> "%LOGFILE%"
 if exist "%MODULE_DIR%\db_deploy.bat" (
     call "%MODULE_DIR%\db_deploy.bat" "%CONFIG%" "%LOGFILE%"
@@ -111,6 +123,7 @@ if exist "%MODULE_DIR%\db_deploy.bat" (
 REM ════════════════════════════════════════
 REM MODULE 4: Web Deployment
 REM ════════════════════════════════════════
+echo [%time%] Running: Web Deployment (PHP -^> htdocs)
 echo [%time%] Running: Web Deployment (PHP -^> htdocs) >> "%LOGFILE%"
 if exist "%MODULE_DIR%\web_deploy.bat" (
     call "%MODULE_DIR%\web_deploy.bat" "%CONFIG%" "%LOGFILE%"
@@ -118,6 +131,10 @@ if exist "%MODULE_DIR%\web_deploy.bat" (
     echo [%time%] WARNING: web_deploy.bat not found! >> "%LOGFILE%"
 )
 
+echo =========================================
+echo [%time%] ALL MODULES COMPLETE
+echo =========================================
+echo.
 echo ========================================= >> "%LOGFILE%"
 echo [%time%] ALL MODULES COMPLETE >> "%LOGFILE%"
 echo ========================================= >> "%LOGFILE%"
@@ -130,6 +147,10 @@ if exist "%USB_DRIVE%\" (
     goto WAIT_FOR_REMOVAL
 )
 
+echo.
+echo [%time%] USB REMOVED: %USB_DRIVE%
+echo [%time%] Waiting for next insertion...
+echo.
 echo [%time%] USB REMOVED: %USB_DRIVE% >> "%LOGFILE%"
 echo [%time%] Waiting for next insertion... >> "%LOGFILE%"
 echo. >> "%LOGFILE%"

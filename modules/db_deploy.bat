@@ -28,11 +28,18 @@ for /f "usebackq tokens=1,2 delims==" %%a in ("%CONFIG_FILE%") do (
 )
 
 REM Defaults
-if not defined MYSQL_BIN set MYSQL_BIN=C:\xampp\mysql\bin\mysql.exe
+if not defined MYSQL_BIN set MYSQL_BIN=E:\xampp\mysql\bin\mysql.exe
 if not defined MYSQL_USER set MYSQL_USER=root
 if not defined MYSQL_PASS set MYSQL_PASS=
 if not defined SQL_BASE set SQL_BASE=E:\Pliki\Projects\databases
 if not defined CHARSET set CHARSET=utf8mb4
+
+REM Build MySQL password argument
+if "%MYSQL_PASS%"=="" (
+    set MYSQL_PASS_ARG=
+) else (
+    set MYSQL_PASS_ARG=-p%MYSQL_PASS%
+)
 
 REM Check if MySQL exists
 if not exist "%MYSQL_BIN%" (
@@ -66,6 +73,7 @@ echo [%time%] Successfully deployed: %SUCCESS% >> "%LOGFILE%"
 echo [%time%] Failed: %FAILED% >> "%LOGFILE%"
 echo [%time%] Database Deployment Module Complete >> "%LOGFILE%"
 echo.
+
 exit /b 0
 
 REM ==== SUBROUTINES ====
@@ -92,9 +100,15 @@ echo [%time%] Deploying: !FILE! >> "%LOGFILE%"
 echo [%time%]   - Database: !DB_NAME! >> "%LOGFILE%"
 echo [%time%]   - Class: !CLASS! >> "%LOGFILE%"
 
-REM Drop and create database
-"%MYSQL_BIN%" -u %MYSQL_USER% %MYSQL_PASS% -e "DROP DATABASE IF EXISTS `!DB_NAME!`; CREATE DATABASE `!DB_NAME!` CHARACTER SET %CHARSET%;" >> "%LOGFILE%" 2>&1
+REM Drop database if exists, then create new one
+"%MYSQL_BIN%" -u %MYSQL_USER% %MYSQL_PASS_ARG% -e "DROP DATABASE IF EXISTS `!DB_NAME!`;" 2>>"%LOGFILE%"
+if errorlevel 1 (
+    echo [%time%] ERROR: Failed to drop database: !DB_NAME! >> "%LOGFILE%"
+    set /a FAILED+=1
+    goto :EOF
+)
 
+"%MYSQL_BIN%" -u %MYSQL_USER% %MYSQL_PASS_ARG% -e "CREATE DATABASE `!DB_NAME!` CHARACTER SET %CHARSET%;" 2>>"%LOGFILE%"
 if errorlevel 1 (
     echo [%time%] ERROR: Failed to create database: !DB_NAME! >> "%LOGFILE%"
     set /a FAILED+=1
@@ -102,7 +116,7 @@ if errorlevel 1 (
 )
 
 REM Import SQL file
-"%MYSQL_BIN%" -u %MYSQL_USER% %MYSQL_PASS% "!DB_NAME!" < "!FILE!" >> "%LOGFILE%" 2>&1
+"%MYSQL_BIN%" -u %MYSQL_USER% %MYSQL_PASS_ARG% "!DB_NAME!" < "!FILE!" 2>>"%LOGFILE%"
 
 if errorlevel 1 (
     echo [%time%] ERROR: Failed to import: !FILE! >> "%LOGFILE%"
