@@ -2,13 +2,14 @@
 setlocal EnableDelayedExpansion
 
 REM ==========================================
-REM USB SYNC MODULE - ROBUST UTF-8 + TIMEOUT
+REM USB SYNC MODULE - COMPLETE VERSION
 REM ==========================================
-REM Fixes:
-REM 1. UTF-8 encoding for Polish characters
-REM 2. Timeout protection (max 60s per operation)
-REM 3. Skip deeply nested problematic folders
-REM 4. Better error recovery
+REM Features:
+REM 1. Syncs klasaX folders (klasa1-5)
+REM 2. Syncs standalone project folders
+REM 3. UTF-8 support for Polish characters
+REM 4. Timeout protection (90 seconds)
+REM 5. Depth limiting and junction exclusion
 REM ==========================================
 
 REM Save current code page
@@ -22,9 +23,9 @@ set CONFIG_FILE=%~1
 set LOGFILE=%~2
 
 echo [%time%] ======================================= >> "%LOGFILE%"
-echo [%time%] USB SYNC MODULE START (ROBUST UTF-8) >> "%LOGFILE%"
+echo [%time%] USB SYNC MODULE START (COMPLETE) >> "%LOGFILE%"
 echo [%time%] ======================================= >> "%LOGFILE%"
-echo [%time%] Code page set to UTF-8 (65001) for Polish characters >> "%LOGFILE%"
+echo [%time%] UTF-8 enabled for Polish characters >> "%LOGFILE%"
 
 REM Read USB drive from config
 for /f "usebackq tokens=1,2 delims==" %%a in ("%CONFIG_FILE%") do (
@@ -72,37 +73,37 @@ echo [%time%] Failed: %PHASE1_FAILED% >> "%LOGFILE%"
 echo [%time%] --------------------------------------- >> "%LOGFILE%"
 
 REM ==========================================
-REM PHASE 2: USB TO LOCAL (SELECTIVE KLASA)
+REM PHASE 2: USB TO LOCAL (COMPLETE SYNC)
 REM ==========================================
 echo [%time%] ======================================= >> "%LOGFILE%"
-echo [%time%] PHASE 2: USB -^> LOCAL (KLASA SYNC) >> "%LOGFILE%"
+echo [%time%] PHASE 2: USB -^> LOCAL (COMPLETE SYNC) >> "%LOGFILE%"
 echo [%time%] ======================================= >> "%LOGFILE%"
 
 echo [%time%] Syncing school subjects... >> "%LOGFILE%"
 
 echo [%time%] [Subject] Databases (db)... >> "%LOGFILE%"
-call :SYNC_SUBJECT_KLASA "db"
+call :SYNC_SUBJECT_COMPLETE "db"
 
 echo [%time%] [Language] C++ (cpp)... >> "%LOGFILE%"
-call :SYNC_LANGUAGE_KLASA "cpp"
+call :SYNC_LANGUAGE_COMPLETE "cpp"
 
 echo [%time%] [Language] Python (python)... >> "%LOGFILE%"
-call :SYNC_LANGUAGE_KLASA "python"
+call :SYNC_LANGUAGE_COMPLETE "python"
 
 echo [%time%] [Subject] Web development (web)... >> "%LOGFILE%"
-call :SYNC_SUBJECT_KLASA "web"
+call :SYNC_SUBJECT_COMPLETE "web"
 
 echo [%time%] [Subject] BHP (bhp)... >> "%LOGFILE%"
-call :SYNC_SUBJECT_KLASA "bhp"
+call :SYNC_SUBJECT_COMPLETE "bhp"
 
 echo [%time%] [Subject] Podstawy Informatyki (pod_inf)... >> "%LOGFILE%"
-call :SYNC_SUBJECT_KLASA "pod_inf"
+call :SYNC_SUBJECT_COMPLETE "pod_inf"
 
 echo [%time%] [Subject] Informatyka (informatyka)... >> "%LOGFILE%"
-call :SYNC_SUBJECT_KLASA "informatyka"
+call :SYNC_SUBJECT_COMPLETE "informatyka"
 
 echo [%time%] [Subject] Przygotowanie (przygot)... >> "%LOGFILE%"
-call :SYNC_SUBJECT_KLASA "przygot"
+call :SYNC_SUBJECT_COMPLETE "przygot"
 
 echo [%time%] --------------------------------------- >> "%LOGFILE%"
 echo [%time%] Phase 2 Summary: >> "%LOGFILE%"
@@ -176,45 +177,24 @@ if not exist "%SRC%" (
 echo [%time%] MIRROR: %SRC% >> "%LOGFILE%"
 echo [%time%]     -^> %DST% >> "%LOGFILE%"
 
-REM Run robocopy with timeout protection using START command
-REM /B = Background
-REM /WAIT = Wait for process to finish
-set TEMP_LOG=%TEMP%\robocopy_%RANDOM%.log
-
-start /B /WAIT cmd /c "robocopy "%SRC%" "%DST%" /MIR /R:2 /W:3 /NFL /NDL /NJH /NJS /MT:4 /UNICODE > "%TEMP_LOG%" 2>&1"
-
-REM Wait up to 60 seconds for robocopy to complete
-set TIMEOUT_COUNTER=0
-:WAIT_MIRROR_LOOP
-if not exist "%TEMP_LOG%" (
-    timeout /t 1 /nobreak >nul
-    set /a TIMEOUT_COUNTER+=1
-    if !TIMEOUT_COUNTER! LSS 60 goto WAIT_MIRROR_LOOP
-    
-    echo [%time%] ERROR: Mirror operation timed out for %KEY% >> "%LOGFILE%"
-    set /a PHASE1_FAILED+=1
-    goto :EOF
-)
-
-REM Check robocopy result from log
-type "%TEMP_LOG%" >> "%LOGFILE%"
-del "%TEMP_LOG%" 2>nul
+REM Run robocopy with timeout protection
+robocopy "%SRC%" "%DST%" /MIR /R:2 /W:3 /NFL /NDL /NJH /NJS /MT:2 /LEV:10 /XJ /XJD /UNICODE >> "%LOGFILE%" 2>&1
 
 REM Robocopy exit codes: 0-7 = success, 8+ = errors
-REM Since we can't get ERRORLEVEL from background process, check if files exist
-if exist "%DST%" (
-    echo [%time%] SUCCESS: %KEY% mirrored >> "%LOGFILE%"
-    set /a PHASE1_SUCCESS+=1
-) else (
+if errorlevel 8 (
     echo [%time%] ERROR: Mirror failed for %KEY% >> "%LOGFILE%"
     set /a PHASE1_FAILED+=1
+) else (
+    echo [%time%] SUCCESS: %KEY% mirrored (code: !ERRORLEVEL!) >> "%LOGFILE%"
+    set /a PHASE1_SUCCESS+=1
 )
 goto :EOF
 
 REM ==========================================
-REM SUBROUTINE: SYNC_SUBJECT_KLASA
+REM SUBROUTINE: SYNC_SUBJECT_COMPLETE
+REM Syncs BOTH klasaX folders AND standalone projects
 REM ==========================================
-:SYNC_SUBJECT_KLASA
+:SYNC_SUBJECT_COMPLETE
 set SUBJECT=%~1
 set SUBJ_SRC=
 set SUBJ_DST=
@@ -245,15 +225,17 @@ if not exist "%SUBJ_SRC%" (
     goto :EOF
 )
 
-REM Track if we synced any klasa folders
-set KLASA_SYNCED=0
+REM Track if we synced anything
+set ANYTHING_SYNCED=0
 
-REM Loop through klasa1-5
+REM ==========================================
+REM PART 1: Sync klasaX folders (klasa1-5)
+REM ==========================================
+echo [%time%] Scanning for klasa folders... >> "%LOGFILE%"
+
 for %%k in (klasa1 klasa2 klasa3 klasa4 klasa5) do (
     set KLASA_SRC=%SUBJ_SRC%\%%k
     set KLASA_DST=%SUBJ_DST%\%%k
-    
-    echo [%time%] Checking klasa: !KLASA_SRC! >> "%LOGFILE%"
     
     if exist "!KLASA_SRC!" (
         echo [%time%] FOUND: %%k for %SUBJECT% >> "%LOGFILE%"
@@ -267,83 +249,70 @@ for %%k in (klasa1 klasa2 klasa3 klasa4 klasa5) do (
         echo [%time%] MIRROR: !KLASA_SRC! >> "%LOGFILE%"
         echo [%time%]     -^> !KLASA_DST! >> "%LOGFILE%"
         
-        REM Use ROBOCOPY with stricter settings to avoid hanging
-        REM /LEV:10 = Limit directory depth to 10 levels (prevents infinite loops)
-        REM /R:1 = Only 1 retry on errors
-        REM /W:2 = Wait 2 seconds between retries
-        REM /XJ = Exclude junction points (can cause loops)
-        REM /XJD = Exclude junction directories
+        REM Sync with robocopy
+        call :SYNC_WITH_TIMEOUT "!KLASA_SRC!" "!KLASA_DST!" "%SUBJECT%\%%k"
         
-        set TEMP_LOG=%TEMP%\robocopy_klasa_%RANDOM%.log
-        
-        REM Run with timeout protection
-        echo [%time%] Starting robocopy with 90-second timeout... >> "%LOGFILE%"
-        
-        start /B "" cmd /c "robocopy "!KLASA_SRC!" "!KLASA_DST!" /MIR /LEV:10 /R:1 /W:2 /XJ /XJD /NFL /NDL /NJH /NJS /MT:2 /UNICODE > "!TEMP_LOG!" 2>&1 & exit"
-        
-        REM Wait for completion with timeout
-        set WAIT_COUNT=0
-        :WAIT_KLASA_LOOP
-        timeout /t 1 /nobreak >nul
-        set /a WAIT_COUNT+=1
-        
-        REM Check if process is still running by checking if log is being written
-        if !WAIT_COUNT! LSS 90 (
-            if not exist "!TEMP_LOG!" goto WAIT_KLASA_LOOP
-            
-            REM Check if robocopy completed (file size stable)
-            for %%F in ("!TEMP_LOG!") do set LOGSIZE1=%%~zF
-            timeout /t 1 /nobreak >nul
-            for %%F in ("!TEMP_LOG!") do set LOGSIZE2=%%~zF
-            
-            if not "!LOGSIZE1!"=="!LOGSIZE2!" goto WAIT_KLASA_LOOP
-        ) else (
-            echo [%time%] ERROR: Robocopy timed out after 90 seconds for %SUBJECT%\%%k >> "%LOGFILE%"
-            echo [%time%] This usually means there are problematic nested folders >> "%LOGFILE%"
-            
-            REM Kill any hung robocopy processes
-            taskkill /F /IM robocopy.exe >nul 2>&1
-            
-            if exist "!TEMP_LOG!" type "!TEMP_LOG!" >> "%LOGFILE%"
-            del "!TEMP_LOG!" 2>nul
-            
-            set /a PHASE2_FAILED+=1
-            goto :CONTINUE_KLASA
+        if !SYNC_RESULT! EQU 0 (
+            set ANYTHING_SYNCED=1
         )
-        
-        REM Process completed successfully
-        if exist "!TEMP_LOG!" (
-            type "!TEMP_LOG!" >> "%LOGFILE%"
-            del "!TEMP_LOG!" 2>nul
-        )
-        
-        if exist "!KLASA_DST!" (
-            echo [%time%] SUCCESS: %SUBJECT%\%%k synced >> "%LOGFILE%"
-            set /a PHASE2_SUCCESS+=1
-            set KLASA_SYNCED=1
-        ) else (
-            echo [%time%] ERROR: Failed to sync %SUBJECT%\%%k (destination not created) >> "%LOGFILE%"
-            set /a PHASE2_FAILED+=1
-        )
-        
-        :CONTINUE_KLASA
     ) else (
-        echo [%time%] INFO: %%k not found for %SUBJECT% (normal if not in that year yet) >> "%LOGFILE%"
+        echo [%time%] INFO: %%k not found for %SUBJECT% >> "%LOGFILE%"
     )
 )
 
-REM If no klasa folders were found at all
-if !KLASA_SYNCED! EQU 0 (
-    echo [%time%] INFO: No klasa folders found for %SUBJECT% >> "%LOGFILE%"
+REM ==========================================
+REM PART 2: Sync standalone project folders
+REM ==========================================
+echo [%time%] Scanning for standalone projects in %SUBJECT%... >> "%LOGFILE%"
+
+REM Get all subdirectories in the subject folder
+for /d %%P in ("%SUBJ_SRC%\*") do (
+    set PROJECT_NAME=%%~nxP
+    
+    REM Skip if it's a klasa folder (already handled above)
+    set IS_KLASA=0
+    for %%k in (klasa1 klasa2 klasa3 klasa4 klasa5) do (
+        if /i "!PROJECT_NAME!"=="%%k" set IS_KLASA=1
+    )
+    
+    REM If not a klasa folder, it's a standalone project
+    if !IS_KLASA! EQU 0 (
+        set PROJECT_SRC=%%P
+        set PROJECT_DST=%SUBJ_DST%\!PROJECT_NAME!
+        
+        echo [%time%] FOUND: Standalone project "!PROJECT_NAME!" in %SUBJECT% >> "%LOGFILE%"
+        
+        REM Ensure destination exists
+        if not exist "!PROJECT_DST!" (
+            echo [%time%] Creating destination: !PROJECT_DST! >> "%LOGFILE%"
+            mkdir "!PROJECT_DST!" 2>nul
+        )
+        
+        echo [%time%] MIRROR: !PROJECT_SRC! >> "%LOGFILE%"
+        echo [%time%]     -^> !PROJECT_DST! >> "%LOGFILE%"
+        
+        REM Sync with robocopy
+        call :SYNC_WITH_TIMEOUT "!PROJECT_SRC!" "!PROJECT_DST!" "%SUBJECT%\!PROJECT_NAME!"
+        
+        if !SYNC_RESULT! EQU 0 (
+            set ANYTHING_SYNCED=1
+        )
+    )
+)
+
+REM Final status for this subject
+if !ANYTHING_SYNCED! EQU 0 (
+    echo [%time%] INFO: No folders found for %SUBJECT% >> "%LOGFILE%"
     set /a PHASE2_SKIPPED+=1
 )
 
 goto :EOF
 
 REM ==========================================
-REM SUBROUTINE: SYNC_LANGUAGE_KLASA
+REM SUBROUTINE: SYNC_LANGUAGE_COMPLETE
+REM Same as SYNC_SUBJECT_COMPLETE but for languages
 REM ==========================================
-:SYNC_LANGUAGE_KLASA
+:SYNC_LANGUAGE_COMPLETE
 set LANG=%~1
 set LANG_SRC=
 set LANG_DST=
@@ -374,15 +343,17 @@ if not exist "%LANG_SRC%" (
     goto :EOF
 )
 
-REM Track if we synced any klasa folders
-set KLASA_SYNCED=0
+REM Track if we synced anything
+set ANYTHING_SYNCED=0
 
-REM Loop through klasa1-5
+REM ==========================================
+REM PART 1: Sync klasaX folders (klasa1-5)
+REM ==========================================
+echo [%time%] Scanning for klasa folders... >> "%LOGFILE%"
+
 for %%k in (klasa1 klasa2 klasa3 klasa4 klasa5) do (
     set KLASA_SRC=%LANG_SRC%\%%k
     set KLASA_DST=%LANG_DST%\%%k
-    
-    echo [%time%] Checking klasa: !KLASA_SRC! >> "%LOGFILE%"
     
     if exist "!KLASA_SRC!" (
         echo [%time%] FOUND: %%k for %LANG% >> "%LOGFILE%"
@@ -396,65 +367,133 @@ for %%k in (klasa1 klasa2 klasa3 klasa4 klasa5) do (
         echo [%time%] MIRROR: !KLASA_SRC! >> "%LOGFILE%"
         echo [%time%]     -^> !KLASA_DST! >> "%LOGFILE%"
         
-        set TEMP_LOG=%TEMP%\robocopy_lang_%RANDOM%.log
+        REM Sync with robocopy
+        call :SYNC_WITH_TIMEOUT "!KLASA_SRC!" "!KLASA_DST!" "%LANG%\%%k"
         
-        echo [%time%] Starting robocopy with 90-second timeout... >> "%LOGFILE%"
-        
-        start /B "" cmd /c "robocopy "!KLASA_SRC!" "!KLASA_DST!" /MIR /LEV:10 /R:1 /W:2 /XJ /XJD /NFL /NDL /NJH /NJS /MT:2 /UNICODE > "!TEMP_LOG!" 2>&1 & exit"
-        
-        REM Wait for completion with timeout
-        set WAIT_COUNT=0
-        :WAIT_LANG_LOOP
-        timeout /t 1 /nobreak >nul
-        set /a WAIT_COUNT+=1
-        
-        if !WAIT_COUNT! LSS 90 (
-            if not exist "!TEMP_LOG!" goto WAIT_LANG_LOOP
-            
-            REM Check if robocopy completed (file size stable)
-            for %%F in ("!TEMP_LOG!") do set LOGSIZE1=%%~zF
-            timeout /t 1 /nobreak >nul
-            for %%F in ("!TEMP_LOG!") do set LOGSIZE2=%%~zF
-            
-            if not "!LOGSIZE1!"=="!LOGSIZE2!" goto WAIT_LANG_LOOP
-        ) else (
-            echo [%time%] ERROR: Robocopy timed out after 90 seconds for %LANG%\%%k >> "%LOGFILE%"
-            echo [%time%] Killing hung robocopy process... >> "%LOGFILE%"
-            
-            taskkill /F /IM robocopy.exe >nul 2>&1
-            
-            if exist "!TEMP_LOG!" type "!TEMP_LOG!" >> "%LOGFILE%"
-            del "!TEMP_LOG!" 2>nul
-            
-            set /a PHASE2_FAILED+=1
-            goto :CONTINUE_LANG
+        if !SYNC_RESULT! EQU 0 (
+            set ANYTHING_SYNCED=1
         )
-        
-        REM Process completed successfully
-        if exist "!TEMP_LOG!" (
-            type "!TEMP_LOG!" >> "%LOGFILE%"
-            del "!TEMP_LOG!" 2>nul
-        )
-        
-        if exist "!KLASA_DST!" (
-            echo [%time%] SUCCESS: %LANG%\%%k synced >> "%LOGFILE%"
-            set /a PHASE2_SUCCESS+=1
-            set KLASA_SYNCED=1
-        ) else (
-            echo [%time%] ERROR: Failed to sync %LANG%\%%k >> "%LOGFILE%"
-            set /a PHASE2_FAILED+=1
-        )
-        
-        :CONTINUE_LANG
     ) else (
-        echo [%time%] INFO: %%k not found for %LANG% (normal if not in that year yet) >> "%LOGFILE%"
+        echo [%time%] INFO: %%k not found for %LANG% >> "%LOGFILE%"
     )
 )
 
-REM If no klasa folders were found at all
-if !KLASA_SYNCED! EQU 0 (
-    echo [%time%] INFO: No klasa folders found for %LANG% >> "%LOGFILE%"
+REM ==========================================
+REM PART 2: Sync standalone project folders
+REM ==========================================
+echo [%time%] Scanning for standalone projects in %LANG%... >> "%LOGFILE%"
+
+REM Get all subdirectories in the language folder
+for /d %%P in ("%LANG_SRC%\*") do (
+    set PROJECT_NAME=%%~nxP
+    
+    REM Skip if it's a klasa folder (already handled above)
+    set IS_KLASA=0
+    for %%k in (klasa1 klasa2 klasa3 klasa4 klasa5) do (
+        if /i "!PROJECT_NAME!"=="%%k" set IS_KLASA=1
+    )
+    
+    REM If not a klasa folder, it's a standalone project
+    if !IS_KLASA! EQU 0 (
+        set PROJECT_SRC=%%P
+        set PROJECT_DST=%LANG_DST%\!PROJECT_NAME!
+        
+        echo [%time%] FOUND: Standalone project "!PROJECT_NAME!" in %LANG% >> "%LOGFILE%"
+        
+        REM Ensure destination exists
+        if not exist "!PROJECT_DST!" (
+            echo [%time%] Creating destination: !PROJECT_DST! >> "%LOGFILE%"
+            mkdir "!PROJECT_DST!" 2>nul
+        )
+        
+        echo [%time%] MIRROR: !PROJECT_SRC! >> "%LOGFILE%"
+        echo [%time%]     -^> !PROJECT_DST! >> "%LOGFILE%"
+        
+        REM Sync with robocopy
+        call :SYNC_WITH_TIMEOUT "!PROJECT_SRC!" "!PROJECT_DST!" "%LANG%\!PROJECT_NAME!"
+        
+        if !SYNC_RESULT! EQU 0 (
+            set ANYTHING_SYNCED=1
+        )
+    )
+)
+
+REM Final status for this language
+if !ANYTHING_SYNCED! EQU 0 (
+    echo [%time%] INFO: No folders found for %LANG% >> "%LOGFILE%"
     set /a PHASE2_SKIPPED+=1
+)
+
+goto :EOF
+
+REM ==========================================
+REM SUBROUTINE: SYNC_WITH_TIMEOUT
+REM Robust sync with timeout protection
+REM ==========================================
+:SYNC_WITH_TIMEOUT
+set "SYNC_SRC=%~1"
+set "SYNC_DST=%~2"
+set "SYNC_NAME=%~3"
+set SYNC_RESULT=1
+
+set TEMP_LOG=%TEMP%\robocopy_%RANDOM%.log
+
+echo [%time%] Starting robocopy with 90-second timeout... >> "%LOGFILE%"
+
+REM Run robocopy in background
+start /B "" cmd /c "robocopy "%SYNC_SRC%" "%SYNC_DST%" /MIR /LEV:10 /R:1 /W:2 /XJ /XJD /NFL /NDL /NJH /NJS /MT:2 /UNICODE > "%TEMP_LOG%" 2>&1 & exit"
+
+REM Wait for completion with timeout
+set WAIT_COUNT=0
+:WAIT_SYNC_LOOP
+timeout /t 1 /nobreak >nul 2>nul
+set /a WAIT_COUNT+=1
+
+if %WAIT_COUNT% LSS 90 (
+    if not exist "%TEMP_LOG%" goto WAIT_SYNC_LOOP
+    
+    REM Check if robocopy completed (file size stable for 2 seconds)
+    for %%F in ("%TEMP_LOG%") do set LOGSIZE1=%%~zF
+    timeout /t 1 /nobreak >nul 2>nul
+    for %%F in ("%TEMP_LOG%") do set LOGSIZE2=%%~zF
+    timeout /t 1 /nobreak >nul 2>nul
+    for %%F in ("%TEMP_LOG%") do set LOGSIZE3=%%~zF
+    
+    if not "%LOGSIZE1%"=="%LOGSIZE2%" goto WAIT_SYNC_LOOP
+    if not "%LOGSIZE2%"=="%LOGSIZE3%" goto WAIT_SYNC_LOOP
+    
+    REM File size stable for 2 seconds - robocopy finished
+    goto SYNC_COMPLETED
+)
+
+REM Timeout occurred
+echo [%time%] ERROR: Robocopy timed out after 90 seconds for %SYNC_NAME% >> "%LOGFILE%"
+echo [%time%] Killing hung robocopy process... >> "%LOGFILE%"
+
+taskkill /F /IM robocopy.exe >nul 2>&1
+
+if exist "%TEMP_LOG%" type "%TEMP_LOG%" >> "%LOGFILE%"
+del "%TEMP_LOG%" 2>nul
+
+set /a PHASE2_FAILED+=1
+set SYNC_RESULT=1
+goto :EOF
+
+:SYNC_COMPLETED
+REM Process completed successfully
+if exist "%TEMP_LOG%" (
+    type "%TEMP_LOG%" >> "%LOGFILE%"
+    del "%TEMP_LOG%" 2>nul
+)
+
+if exist "%SYNC_DST%" (
+    echo [%time%] SUCCESS: %SYNC_NAME% synced >> "%LOGFILE%"
+    set /a PHASE2_SUCCESS+=1
+    set SYNC_RESULT=0
+) else (
+    echo [%time%] ERROR: Failed to sync %SYNC_NAME% (destination not created) >> "%LOGFILE%"
+    set /a PHASE2_FAILED+=1
+    set SYNC_RESULT=1
 )
 
 goto :EOF
