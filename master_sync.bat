@@ -2,12 +2,10 @@
 setlocal EnableDelayedExpansion
 
 REM ==========================================
-REM AutoSync Master - FIXED VERSION
+REM AutoSync Master - CONTINUOUS MODE
 REM ==========================================
-REM FIXES:
-REM - Module paths corrected for root directory
-REM - Better error handling
-REM - Proper module execution
+REM Runs every 5 minutes automatically
+REM No USB wait - just syncs on schedule
 REM ==========================================
 
 set LOCKFILE=%TEMP%\autosync_master.lock
@@ -16,11 +14,8 @@ REM Check for existing instance
 if exist "%LOCKFILE%" (
     echo.
     echo ============================================
-    echo WARNING: Lockfile detected!
+    echo WARNING: Another instance is running!
     echo ============================================
-    echo Another instance may be running, or the last
-    echo session crashed without cleaning up.
-    echo.
     echo Lockfile: %LOCKFILE%
     echo.
     choice /C YN /M "Delete lockfile and continue"
@@ -29,17 +24,11 @@ if exist "%LOCKFILE%" (
         pause
         exit /b 1
     )
-    echo Deleting stale lockfile...
     del "%LOCKFILE%" 2>nul
-    echo.
 )
 
-REM Create lockfile with timestamp
+REM Create lockfile
 echo AutoSync started: %date% %time% > "%LOCKFILE%"
-echo PID: %RANDOM%%RANDOM% >> "%LOCKFILE%"
-
-REM Setup cleanup trap
-set "CLEANUP_NEEDED=1"
 
 set SCRIPT_DIR=%~dp0
 set SCRIPT_DIR=%SCRIPT_DIR:~0,-1%
@@ -49,68 +38,19 @@ set LOG_DIR=%SCRIPT_DIR%\logs
 
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 
-REM Generate log filename with date
-for /f "tokens=2-4 delims=/ " %%a in ('date /t') do (
-    set LOG_DATE=%%c_%%a_%%b
-)
+REM Generate log filename
+for /f "tokens=2-4 delims=/ " %%a in ('date /t') do set LOG_DATE=%%c_%%a_%%b
 set LOGFILE=%LOG_DIR%\sync_%LOG_DATE%.log
 
-REM Check config file
+REM Check config
 if not exist "%CONFIG%" (
-    echo ============================================
-    echo ERROR: Configuration file not found!
-    echo ============================================
-    echo Expected location: %CONFIG%
-    echo.
-    echo Please create sync_config.ini
-    echo.
-    call :CLEANUP
+    echo ERROR: Configuration file not found: %CONFIG%
+    del "%LOCKFILE%" 2>nul
     pause
     exit /b 1
 )
 
-REM Display startup banner
-cls
-echo ============================================
-echo    AutoSync Master - FIXED v2.1
-echo ============================================
-echo Started: %date% %time%
-echo Config: %CONFIG%
-echo Log: %LOGFILE%
-echo ============================================
-echo.
-
-REM Log startup
-echo. >> "%LOGFILE%"
-echo ============================================ >> "%LOGFILE%"
-echo AutoSync Master FIXED Started >> "%LOGFILE%"
-echo ============================================ >> "%LOGFILE%"
-echo Timestamp: %date% %time% >> "%LOGFILE%"
-echo Config: %CONFIG% >> "%LOGFILE%"
-echo Lockfile: %LOCKFILE% >> "%LOGFILE%"
-echo ============================================ >> "%LOGFILE%"
-echo. >> "%LOGFILE%"
-
-REM Read USB drive configuration
-set USB_DRIVE=
-for /f "usebackq tokens=1,2 delims==" %%a in ("%CONFIG%") do (
-    set LINE=%%a
-    set VALUE=%%b
-    for /f "tokens=* delims= " %%x in ("!LINE!") do set LINE=%%x
-    for /f "tokens=* delims= " %%x in ("!VALUE!") do set VALUE=%%x
-    if "!LINE!"=="drive" set USB_DRIVE=!VALUE!
-)
-
-if not defined USB_DRIVE (
-    echo ERROR: USB drive not configured in sync_config.ini
-    echo Please set drive=X: in the [USB] section
-    echo.
-    call :CLEANUP
-    pause
-    exit /b 1
-)
-
-REM Read check interval
+REM Read check interval (in minutes)
 set CHECK_INTERVAL=5
 for /f "usebackq tokens=1,2 delims==" %%a in ("%CONFIG%") do (
     set LINE=%%a
@@ -120,76 +60,99 @@ for /f "usebackq tokens=1,2 delims==" %%a in ("%CONFIG%") do (
     if "!LINE!"=="check_interval" set CHECK_INTERVAL=!VALUE!
 )
 
-echo Monitoring USB drive: %USB_DRIVE%
-echo Check interval: %CHECK_INTERVAL% seconds
-echo.
-echo Press Ctrl+C to stop (lockfile will be cleaned up)
+REM Read USB drive
+set USB_DRIVE=
+for /f "usebackq tokens=1,2 delims==" %%a in ("%CONFIG%") do (
+    set LINE=%%a
+    set VALUE=%%b
+    for /f "tokens=* delims= " %%x in ("!LINE!") do set LINE=%%x
+    for /f "tokens=* delims= " %%x in ("!VALUE!") do set VALUE=%%x
+    if "!LINE!"=="drive" set USB_DRIVE=!VALUE!
+)
+
+cls
+echo ============================================
+echo    AutoSync Master - CONTINUOUS MODE
+echo ============================================
+echo Started: %date% %time%
+echo Config: %CONFIG%
+echo Log: %LOGFILE%
+echo Interval: %CHECK_INTERVAL% minutes
 echo ============================================
 echo.
+echo Press Ctrl+C to stop
+echo.
 
-echo [%time%] Waiting for USB drive: %USB_DRIVE% >> "%LOGFILE%"
+echo. >> "%LOGFILE%"
+echo ============================================ >> "%LOGFILE%"
+echo AutoSync Master Started - CONTINUOUS MODE >> "%LOGFILE%"
+echo ============================================ >> "%LOGFILE%"
+echo Timestamp: %date% %time% >> "%LOGFILE%"
+echo Interval: %CHECK_INTERVAL% minutes >> "%LOGFILE%"
+echo ============================================ >> "%LOGFILE%"
 
 :MAIN_LOOP
 
-REM ==========================================
-REM WAIT FOR USB INSERTION
-REM ==========================================
-:WAIT_FOR_USB
-if not exist "%USB_DRIVE%\" (
-    REM Show waiting indicator (every 30 seconds)
-    set /a WAIT_COUNT+=1
-    if !WAIT_COUNT! GEQ 6 (
-        echo [%time%] Still waiting for USB: %USB_DRIVE%
-        set WAIT_COUNT=0
-    )
-    timeout /t %CHECK_INTERVAL% /nobreak >nul
-    goto WAIT_FOR_USB
-)
-
-REM Reset wait counter
-set WAIT_COUNT=0
-
-echo.
 echo ============================================
-echo [%time%] USB DETECTED: %USB_DRIVE%
+echo [%time%] STARTING SYNC CYCLE
 echo ============================================
 echo.
 
 echo. >> "%LOGFILE%"
 echo ============================================ >> "%LOGFILE%"
-echo [%time%] USB DETECTED: %USB_DRIVE% >> "%LOGFILE%"
+echo [%time%] SYNC CYCLE START >> "%LOGFILE%"
 echo ============================================ >> "%LOGFILE%"
 
+REM Check if USB is connected (optional - sync works without it)
+if defined USB_DRIVE (
+    if exist "%USB_DRIVE%\" (
+        echo [%time%] USB drive %USB_DRIVE% detected
+        echo [%time%] USB drive %USB_DRIVE% detected >> "%LOGFILE%"
+        set USB_AVAILABLE=1
+    ) else (
+        echo [%time%] USB drive %USB_DRIVE% not connected (skipping USB sync)
+        echo [%time%] USB drive %USB_DRIVE% not connected >> "%LOGFILE%"
+        set USB_AVAILABLE=0
+    )
+) else (
+    set USB_AVAILABLE=0
+)
+
+echo.
+
 REM Track module execution
-set MODULES_RUN=0
 set MODULES_SUCCESS=0
 set MODULES_FAILED=0
+set MODULES_SKIPPED=0
 
 REM ==========================================
 REM MODULE 1: USB SYNC
 REM ==========================================
-echo [%time%] [1/4] Running: USB Sync (E: ^<-^> USB)
-echo [%time%] [1/4] Running: USB Sync (E: ^<-^> USB) >> "%LOGFILE%"
-
-REM FIXED: Modules are in root directory, not in \modules subfolder
-if exist "%SCRIPT_DIR%\usb_sync.bat" (
-    set /a MODULES_RUN+=1
-    
-    call "%SCRIPT_DIR%\usb_sync.bat" "%CONFIG%" "%LOGFILE%"
-    set MODULE_ERROR=!ERRORLEVEL!
-    
-    if !MODULE_ERROR! EQU 0 (
-        echo [%time%] SUCCESS: USB Sync completed
-        echo [%time%] SUCCESS: USB Sync completed >> "%LOGFILE%"
-        set /a MODULES_SUCCESS+=1
+if !USB_AVAILABLE! EQU 1 (
+    if exist "%SCRIPT_DIR%\usb_sync.bat" (
+        echo [%time%] [1/4] Running: USB Sync
+        echo [%time%] [1/4] Running: USB Sync >> "%LOGFILE%"
+        
+        call "%SCRIPT_DIR%\usb_sync.bat" "%CONFIG%" "%LOGFILE%"
+        
+        if !ERRORLEVEL! EQU 0 (
+            echo [%time%] [1/4] ✓ USB Sync completed
+            echo [%time%] [1/4] SUCCESS: USB Sync >> "%LOGFILE%"
+            set /a MODULES_SUCCESS+=1
+        ) else (
+            echo [%time%] [1/4] ✗ USB Sync failed
+            echo [%time%] [1/4] FAILED: USB Sync >> "%LOGFILE%"
+            set /a MODULES_FAILED+=1
+        )
     ) else (
-        echo [%time%] WARNING: USB Sync failed with error code !MODULE_ERROR!
-        echo [%time%] ERROR: USB Sync failed with code !MODULE_ERROR! >> "%LOGFILE%"
-        set /a MODULES_FAILED+=1
+        echo [%time%] [1/4] - USB Sync not found
+        echo [%time%] [1/4] SKIP: usb_sync.bat not found >> "%LOGFILE%"
+        set /a MODULES_SKIPPED+=1
     )
 ) else (
-    echo [%time%] SKIPPED: usb_sync.bat not found in %SCRIPT_DIR%
-    echo [%time%] WARNING: usb_sync.bat not found in %SCRIPT_DIR% >> "%LOGFILE%"
+    echo [%time%] [1/4] - USB Sync skipped (no USB)
+    echo [%time%] [1/4] SKIP: USB not available >> "%LOGFILE%"
+    set /a MODULES_SKIPPED+=1
 )
 
 echo.
@@ -197,27 +160,25 @@ echo.
 REM ==========================================
 REM MODULE 2: GIT SYNC
 REM ==========================================
-echo [%time%] [2/4] Running: Git Sync (auto-commit/push)
-echo [%time%] [2/4] Running: Git Sync (auto-commit/push) >> "%LOGFILE%"
-
 if exist "%SCRIPT_DIR%\git_sync.bat" (
-    set /a MODULES_RUN+=1
+    echo [%time%] [2/4] Running: Git Sync
+    echo [%time%] [2/4] Running: Git Sync >> "%LOGFILE%"
     
     call "%SCRIPT_DIR%\git_sync.bat" "%CONFIG%" "%LOGFILE%"
-    set MODULE_ERROR=!ERRORLEVEL!
     
-    if !MODULE_ERROR! EQU 0 (
-        echo [%time%] SUCCESS: Git Sync completed
-        echo [%time%] SUCCESS: Git Sync completed >> "%LOGFILE%"
+    if !ERRORLEVEL! EQU 0 (
+        echo [%time%] [2/4] ✓ Git Sync completed
+        echo [%time%] [2/4] SUCCESS: Git Sync >> "%LOGFILE%"
         set /a MODULES_SUCCESS+=1
     ) else (
-        echo [%time%] WARNING: Git Sync had issues (code !MODULE_ERROR!)
-        echo [%time%] WARNING: Git Sync exited with code !MODULE_ERROR! >> "%LOGFILE%"
+        echo [%time%] [2/4] ✗ Git Sync failed
+        echo [%time%] [2/4] FAILED: Git Sync >> "%LOGFILE%"
         set /a MODULES_FAILED+=1
     )
 ) else (
-    echo [%time%] SKIPPED: git_sync.bat not found
-    echo [%time%] INFO: git_sync.bat not found >> "%LOGFILE%"
+    echo [%time%] [2/4] - Git Sync not found
+    echo [%time%] [2/4] SKIP: git_sync.bat not found >> "%LOGFILE%"
+    set /a MODULES_SKIPPED+=1
 )
 
 echo.
@@ -225,27 +186,25 @@ echo.
 REM ==========================================
 REM MODULE 3: DATABASE DEPLOYMENT
 REM ==========================================
-echo [%time%] [3/4] Running: Database Deployment (.sql -^> MySQL)
-echo [%time%] [3/4] Running: Database Deployment (.sql -^> MySQL) >> "%LOGFILE%"
-
 if exist "%SCRIPT_DIR%\db_deploy.bat" (
-    set /a MODULES_RUN+=1
+    echo [%time%] [3/4] Running: Database Deploy
+    echo [%time%] [3/4] Running: Database Deploy >> "%LOGFILE%"
     
     call "%SCRIPT_DIR%\db_deploy.bat" "%CONFIG%" "%LOGFILE%"
-    set MODULE_ERROR=!ERRORLEVEL!
     
-    if !MODULE_ERROR! EQU 0 (
-        echo [%time%] SUCCESS: Database Deployment completed
-        echo [%time%] SUCCESS: Database Deployment completed >> "%LOGFILE%"
+    if !ERRORLEVEL! EQU 0 (
+        echo [%time%] [3/4] ✓ Database Deploy completed
+        echo [%time%] [3/4] SUCCESS: Database Deploy >> "%LOGFILE%"
         set /a MODULES_SUCCESS+=1
     ) else (
-        echo [%time%] WARNING: Database Deployment had issues (code !MODULE_ERROR!)
-        echo [%time%] WARNING: Database Deployment exited with code !MODULE_ERROR! >> "%LOGFILE%"
+        echo [%time%] [3/4] ✗ Database Deploy failed
+        echo [%time%] [3/4] FAILED: Database Deploy >> "%LOGFILE%"
         set /a MODULES_FAILED+=1
     )
 ) else (
-    echo [%time%] SKIPPED: db_deploy.bat not found
-    echo [%time%] INFO: db_deploy.bat not found >> "%LOGFILE%"
+    echo [%time%] [3/4] - Database Deploy not found
+    echo [%time%] [3/4] SKIP: db_deploy.bat not found >> "%LOGFILE%"
+    set /a MODULES_SKIPPED+=1
 )
 
 echo.
@@ -253,36 +212,34 @@ echo.
 REM ==========================================
 REM MODULE 4: WEB DEPLOYMENT
 REM ==========================================
-echo [%time%] [4/4] Running: Web Deployment (PHP -^> htdocs)
-echo [%time%] [4/4] Running: Web Deployment (PHP -^> htdocs) >> "%LOGFILE%"
-
 if exist "%SCRIPT_DIR%\web_deploy.bat" (
-    set /a MODULES_RUN+=1
+    echo [%time%] [4/4] Running: Web Deploy
+    echo [%time%] [4/4] Running: Web Deploy >> "%LOGFILE%"
     
     call "%SCRIPT_DIR%\web_deploy.bat" "%CONFIG%" "%LOGFILE%"
-    set MODULE_ERROR=!ERRORLEVEL!
     
-    if !MODULE_ERROR! EQU 0 (
-        echo [%time%] SUCCESS: Web Deployment completed
-        echo [%time%] SUCCESS: Web Deployment completed >> "%LOGFILE%"
+    if !ERRORLEVEL! EQU 0 (
+        echo [%time%] [4/4] ✓ Web Deploy completed
+        echo [%time%] [4/4] SUCCESS: Web Deploy >> "%LOGFILE%"
         set /a MODULES_SUCCESS+=1
     ) else (
-        echo [%time%] WARNING: Web Deployment had issues (code !MODULE_ERROR!)
-        echo [%time%] WARNING: Web Deployment exited with code !MODULE_ERROR! >> "%LOGFILE%"
+        echo [%time%] [4/4] ✗ Web Deploy failed
+        echo [%time%] [4/4] FAILED: Web Deploy >> "%LOGFILE%"
         set /a MODULES_FAILED+=1
     )
 ) else (
-    echo [%time%] SKIPPED: web_deploy.bat not found
-    echo [%time%] INFO: web_deploy.bat not found >> "%LOGFILE%"
+    echo [%time%] [4/4] - Web Deploy not found
+    echo [%time%] [4/4] SKIP: web_deploy.bat not found >> "%LOGFILE%"
+    set /a MODULES_SKIPPED+=1
 )
 
 echo.
 echo ============================================
 echo [%time%] SYNC CYCLE COMPLETE
 echo ============================================
-echo Modules run: %MODULES_RUN%
-echo Successful: %MODULES_SUCCESS%
-echo Failed: %MODULES_FAILED%
+echo Success: %MODULES_SUCCESS% ^| Failed: %MODULES_FAILED% ^| Skipped: %MODULES_SKIPPED%
+echo.
+echo Next sync in %CHECK_INTERVAL% minutes...
 echo ============================================
 echo.
 
@@ -290,60 +247,18 @@ echo. >> "%LOGFILE%"
 echo ============================================ >> "%LOGFILE%"
 echo [%time%] SYNC CYCLE COMPLETE >> "%LOGFILE%"
 echo ============================================ >> "%LOGFILE%"
-echo Modules run: %MODULES_RUN% >> "%LOGFILE%"
-echo Successful: %MODULES_SUCCESS% >> "%LOGFILE%"
+echo Success: %MODULES_SUCCESS% >> "%LOGFILE%"
 echo Failed: %MODULES_FAILED% >> "%LOGFILE%"
+echo Skipped: %MODULES_SKIPPED% >> "%LOGFILE%"
+echo Next sync: %CHECK_INTERVAL% minutes >> "%LOGFILE%"
 echo ============================================ >> "%LOGFILE%"
-echo. >> "%LOGFILE%"
 
-REM ==========================================
-REM WAIT FOR USB REMOVAL
-REM ==========================================
-echo Waiting for USB removal...
-echo [%time%] Waiting for USB removal... >> "%LOGFILE%"
-
-:WAIT_FOR_REMOVAL
-if exist "%USB_DRIVE%\" (
-    timeout /t %CHECK_INTERVAL% /nobreak >nul
-    goto WAIT_FOR_REMOVAL
-)
-
-echo.
-echo ============================================
-echo [%time%] USB REMOVED: %USB_DRIVE%
-echo ============================================
-echo Waiting for next insertion...
-echo.
-
-echo. >> "%LOGFILE%"
-echo [%time%] USB REMOVED: %USB_DRIVE% >> "%LOGFILE%"
-echo [%time%] Waiting for next insertion... >> "%LOGFILE%"
-echo. >> "%LOGFILE%"
+REM Wait for next cycle (convert minutes to seconds)
+set /a WAIT_SECONDS=%CHECK_INTERVAL%*60
+timeout /t %WAIT_SECONDS% /nobreak
 
 goto MAIN_LOOP
 
-REM ==========================================
-REM CLEANUP SUBROUTINE
-REM ==========================================
-:CLEANUP
-if defined CLEANUP_NEEDED (
-    echo.
-    echo [%time%] Cleaning up...
-    echo [%time%] AutoSync cleanup initiated >> "%LOGFILE%" 2>nul
-    
-    if exist "%LOCKFILE%" (
-        del "%LOCKFILE%" 2>nul
-        if exist "%LOCKFILE%" (
-            echo WARNING: Could not delete lockfile!
-            echo Manual cleanup may be needed: %LOCKFILE%
-        ) else (
-            echo Lockfile removed successfully
-        )
-    )
-    
-    echo [%time%] AutoSync stopped cleanly >> "%LOGFILE%" 2>nul
-    set CLEANUP_NEEDED=
-)
-exit /b 0
-
+REM Cleanup on exit (Ctrl+C)
+if exist "%LOCKFILE%" del "%LOCKFILE%" 2>nul
 endlocal

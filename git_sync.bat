@@ -147,7 +147,7 @@ for /f "tokens=1,2" %%a in ('git status --porcelain') do (
     if not defined FILE_TYPES (
         set FILE_TYPES=!EXT!
     ) else (
-        echo !FILE_TYPES! | find "!EXT!" >nul
+        echo.!FILE_TYPES! ^| findstr /C:"!EXT!" >nul
         if errorlevel 1 set FILE_TYPES=!FILE_TYPES!, !EXT!
     )
 )
