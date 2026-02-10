@@ -249,16 +249,16 @@ echo [%time%]     -^> %DST% >> "%LOGFILE%"
 
 REM Run robocopy and capture exit code
 robocopy "%SRC%" "%DST%" /MIR /R:2 /W:3 /NFL /NDL /NJH /NJS /MT:2 /LEV:10 /XJ /XJD /UNICODE >> "%LOGFILE%" 2>&1
-set ROBO_EXIT=%ERRORLEVEL%
+set ROBO_EXIT=!ERRORLEVEL!
 
 REM FIXED: Robocopy exit codes 0-7 = success, 8+ = errors
-if %ROBO_EXIT% GEQ 8 (
-    echo   ERROR: Mirror failed (code: %ROBO_EXIT%)
-    echo [%time%] ERROR: Mirror failed for %KEY% (code: %ROBO_EXIT%) >> "%LOGFILE%"
+if !ROBO_EXIT! GEQ 8 (
+    echo   ERROR: Mirror failed (code: !ROBO_EXIT!)
+    echo [%time%] ERROR: Mirror failed for %KEY% (code: !ROBO_EXIT!) >> "%LOGFILE%"
     set /a PHASE1_FAILED+=1
 ) else (
-    echo   SUCCESS (code: %ROBO_EXIT%)
-    echo [%time%] SUCCESS: %KEY% mirrored (code: %ROBO_EXIT%) >> "%LOGFILE%"
+    echo   SUCCESS (code: !ROBO_EXIT!)
+    echo [%time%] SUCCESS: %KEY% mirrored (code: !ROBO_EXIT!) >> "%LOGFILE%"
     set /a PHASE1_SUCCESS+=1
 )
 echo.
