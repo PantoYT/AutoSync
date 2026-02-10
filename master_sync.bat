@@ -2,14 +2,12 @@
 setlocal EnableDelayedExpansion
 
 REM ==========================================
-REM AutoSync Master - IMPROVED VERSION
+REM AutoSync Master - FIXED VERSION
 REM ==========================================
-REM Added Features:
-REM - Better crash recovery
-REM - Detailed progress logging
-REM - Timeout protection
-REM - Auto-cleanup on errors
-REM - Module success/failure tracking
+REM FIXES:
+REM - Module paths corrected for root directory
+REM - Better error handling
+REM - Proper module execution
 REM ==========================================
 
 set LOCKFILE=%TEMP%\autosync_master.lock
@@ -48,7 +46,6 @@ set SCRIPT_DIR=%SCRIPT_DIR:~0,-1%
 
 set CONFIG=%SCRIPT_DIR%\sync_config.ini
 set LOG_DIR=%SCRIPT_DIR%\logs
-set MODULE_DIR=%SCRIPT_DIR%\modules
 
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 
@@ -65,7 +62,7 @@ if not exist "%CONFIG%" (
     echo ============================================
     echo Expected location: %CONFIG%
     echo.
-    echo Please create sync_config.ini or run setup.bat
+    echo Please create sync_config.ini
     echo.
     call :CLEANUP
     pause
@@ -75,7 +72,7 @@ if not exist "%CONFIG%" (
 REM Display startup banner
 cls
 echo ============================================
-echo    AutoSync Master - IMPROVED v2.0
+echo    AutoSync Master - FIXED v2.1
 echo ============================================
 echo Started: %date% %time%
 echo Config: %CONFIG%
@@ -86,7 +83,7 @@ echo.
 REM Log startup
 echo. >> "%LOGFILE%"
 echo ============================================ >> "%LOGFILE%"
-echo AutoSync Master IMPROVED Started >> "%LOGFILE%"
+echo AutoSync Master FIXED Started >> "%LOGFILE%"
 echo ============================================ >> "%LOGFILE%"
 echo Timestamp: %date% %time% >> "%LOGFILE%"
 echo Config: %CONFIG% >> "%LOGFILE%"
@@ -174,10 +171,11 @@ REM ==========================================
 echo [%time%] [1/4] Running: USB Sync (E: ^<-^> USB)
 echo [%time%] [1/4] Running: USB Sync (E: ^<-^> USB) >> "%LOGFILE%"
 
-if exist "%MODULE_DIR%\usb_sync.bat" (
+REM FIXED: Modules are in root directory, not in \modules subfolder
+if exist "%SCRIPT_DIR%\usb_sync.bat" (
     set /a MODULES_RUN+=1
     
-    call "%MODULE_DIR%\usb_sync.bat" "%CONFIG%" "%LOGFILE%"
+    call "%SCRIPT_DIR%\usb_sync.bat" "%CONFIG%" "%LOGFILE%"
     set MODULE_ERROR=!ERRORLEVEL!
     
     if !MODULE_ERROR! EQU 0 (
@@ -190,8 +188,8 @@ if exist "%MODULE_DIR%\usb_sync.bat" (
         set /a MODULES_FAILED+=1
     )
 ) else (
-    echo [%time%] SKIPPED: usb_sync.bat not found!
-    echo [%time%] WARNING: usb_sync.bat not found in %MODULE_DIR% >> "%LOGFILE%"
+    echo [%time%] SKIPPED: usb_sync.bat not found in %SCRIPT_DIR%
+    echo [%time%] WARNING: usb_sync.bat not found in %SCRIPT_DIR% >> "%LOGFILE%"
 )
 
 echo.
@@ -202,10 +200,10 @@ REM ==========================================
 echo [%time%] [2/4] Running: Git Sync (auto-commit/push)
 echo [%time%] [2/4] Running: Git Sync (auto-commit/push) >> "%LOGFILE%"
 
-if exist "%MODULE_DIR%\git_sync.bat" (
+if exist "%SCRIPT_DIR%\git_sync.bat" (
     set /a MODULES_RUN+=1
     
-    call "%MODULE_DIR%\git_sync.bat" "%CONFIG%" "%LOGFILE%"
+    call "%SCRIPT_DIR%\git_sync.bat" "%CONFIG%" "%LOGFILE%"
     set MODULE_ERROR=!ERRORLEVEL!
     
     if !MODULE_ERROR! EQU 0 (
@@ -230,10 +228,10 @@ REM ==========================================
 echo [%time%] [3/4] Running: Database Deployment (.sql -^> MySQL)
 echo [%time%] [3/4] Running: Database Deployment (.sql -^> MySQL) >> "%LOGFILE%"
 
-if exist "%MODULE_DIR%\db_deploy.bat" (
+if exist "%SCRIPT_DIR%\db_deploy.bat" (
     set /a MODULES_RUN+=1
     
-    call "%MODULE_DIR%\db_deploy.bat" "%CONFIG%" "%LOGFILE%"
+    call "%SCRIPT_DIR%\db_deploy.bat" "%CONFIG%" "%LOGFILE%"
     set MODULE_ERROR=!ERRORLEVEL!
     
     if !MODULE_ERROR! EQU 0 (
@@ -258,10 +256,10 @@ REM ==========================================
 echo [%time%] [4/4] Running: Web Deployment (PHP -^> htdocs)
 echo [%time%] [4/4] Running: Web Deployment (PHP -^> htdocs) >> "%LOGFILE%"
 
-if exist "%MODULE_DIR%\web_deploy.bat" (
+if exist "%SCRIPT_DIR%\web_deploy.bat" (
     set /a MODULES_RUN+=1
     
-    call "%MODULE_DIR%\web_deploy.bat" "%CONFIG%" "%LOGFILE%"
+    call "%SCRIPT_DIR%\web_deploy.bat" "%CONFIG%" "%LOGFILE%"
     set MODULE_ERROR=!ERRORLEVEL!
     
     if !MODULE_ERROR! EQU 0 (
