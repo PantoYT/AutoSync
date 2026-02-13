@@ -1,0 +1,52 @@
+{
+  "app": {
+    "name": "Automation Hub",
+    "version": "1.0.0",
+    "theme": "dark-blue-yellow",
+    "auto_start": false,
+    "check_updates": true,
+    "log_retention_days": 30
+  },
+  "paths": {
+    "scripts": "",
+    "projects": "",
+    "databases": "",
+    "htdocs": "",
+    "xampp": ""
+  },
+  "git": {
+    "default_remote": "origin",
+    "default_branch": "main",
+    "auto_commit": true,
+    "auto_push": true,
+    "smart_messages": true
+  },
+  "mysql": {
+    "host": "localhost",
+    "port": 3306,
+    "user": "root",
+    "password": "",
+    "charset": "utf8mb4"
+  },
+  "presets": {
+    "file_transfers": [],
+    "git_repos": [],
+    "sql_databases": []
+  },
+  "tasks": [],
+  "ui": {
+    "window_geometry": {
+      "width": 1200,
+      "height": 800,
+      "x": 100,
+      "y": 100
+    },
+    "show_tray_icon": true,
+    "minimize_to_tray": true,
+    "start_minimized": false
+  },
+  "_metadata": {
+    "saved_at": "2026-02-13T14:08:49.967134",
+    "version": "1.0.0"
+  }
+}

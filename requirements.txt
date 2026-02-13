@@ -1,0 +1,30 @@
+# Core GUI Framework
+PyQt6>=6.6.0
+PyQt6-Qt6>=6.6.0
+
+# System Integration
+psutil>=5.9.0
+pywin32>=306; platform_system == "Windows"
+
+# Git Integration
+GitPython>=3.1.40
+
+# Database
+pymysql>=1.1.0
+
+# Configuration
+python-dotenv>=1.0.0
+
+# Scheduling
+schedule>=1.2.0
+APScheduler>=3.10.4
+
+# File Operations
+watchdog>=3.0.0
+
+# Logging
+colorlog>=6.8.0
+
+# Optional: Advanced features
+requests>=2.31.0
+pillow>=10.1.0
